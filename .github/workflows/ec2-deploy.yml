@@ -1,0 +1,38 @@
+name: Deploy na EC2
+
+on:
+  workflow_run:
+    workflows: ["Build, test e publicar imagem"]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    # Só iniciar após sucesso do workflow de build/publicação.
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Implantar via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        env:
+          IMAGE: ${{ secrets.DOCKERHUB_USERNAME }}/senai_fastapi:latest
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USERNAME }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          envs: IMAGE
+          script: |
+            set -e
+            sudo docker pull "$IMAGE"
+            sudo docker rm -f senai_fastapi 2>/dev/null || true
+            sudo docker run -d \
+              --name senai_fastapi \
+              --restart unless-stopped \
+              -p 8080:8080 \
+              "$IMAGE"
+            sleep 5
+            curl --fail --retry 5 --retry-delay 2 http://localhost:8080/health
+            sudo docker image prune -f
