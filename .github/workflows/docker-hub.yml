@@ -2,12 +2,15 @@ name: Build, test e publicar imagem
 
 on:
   push:
-    branches: [main]
+    branches: [develop, main]
   pull_request:
-    branches: [main]
+    branches: [develop, main]
 
 permissions:
   contents: read
+
+env:
+  IMAGE_NAME: senai_fastapi
 
 jobs:
   build:
@@ -33,8 +36,8 @@ jobs:
     name: Publicar imagem no Docker Hub
     runs-on: ubuntu-latest
     needs: build
-    # Pull requests de forks não recebem secrets; só publicar em push na main.
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    # Publica somente em push; PRs executam testes sem acessar secrets.
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/develop' || github.ref == 'refs/heads/main')
     steps:
       - name: Baixar código
         uses: actions/checkout@v4
@@ -54,6 +57,6 @@ jobs:
           context: .
           push: true
           tags: |
-            ${{ secrets.DOCKERHUB_USERNAME }}/senai_fastapi:latest
-            ${{ secrets.DOCKERHUB_USERNAME }}/senai_fastapi:${{ github.sha }}
+            ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+            ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}:${{ github.ref_name }}
 

@@ -1,24 +1,64 @@
-name: Deploy na EC2
+name: Deploy Homologacao e Producao
 
 on:
   workflow_run:
     workflows: ["Build, test e publicar imagem"]
     types: [completed]
-    branches: [main]
+    branches: [develop, main]
 
 permissions:
   contents: read
 
+env:
+  IMAGE_NAME: senai_fastapi
+
 jobs:
-  deploy:
-    # Só iniciar após sucesso do workflow de build/publicação.
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+  deploy_homologacao:
+    name: Deploy em homologacao
+    if: >-
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.head_branch == 'develop'
     runs-on: ubuntu-latest
+    environment:
+      name: homologacao
     steps:
       - name: Implantar via SSH
         uses: appleboy/ssh-action@v1.0.3
         env:
-          IMAGE: ${{ secrets.DOCKERHUB_USERNAME }}/senai_fastapi:latest
+          IMAGE: ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}:${{ github.event.workflow_run.head_sha }}
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USERNAME }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          envs: IMAGE
+          script: |
+            set -e
+            sudo docker pull "$IMAGE"
+            sudo docker rm -f senai_fastapi 2>/dev/null || true
+            sudo docker run -d \
+              --name senai_fastapi \
+              --restart unless-stopped \
+              -p 8080:8080 \
+              "$IMAGE"
+            sleep 5
+            curl --fail --retry 5 --retry-delay 2 http://localhost:8080/health
+            sudo docker image prune -f
+
+  deploy_producao:
+    name: Deploy em producao (aprovacao necessaria)
+    if: >-
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.head_branch == 'main'
+    runs-on: ubuntu-latest
+    environment:
+      name: producao
+    steps:
+      - name: Implantar via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        env:
+          IMAGE: ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}:${{ github.event.workflow_run.head_sha }}
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USERNAME }}

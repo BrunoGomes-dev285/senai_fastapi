@@ -80,3 +80,23 @@ Faça push para `main`. O primeiro workflow executa os testes; se todos passarem
 ## Observação sobre o material do exercício
 
 No PDF, `needs: Build/Imagem` aparece em arquivos YAML diferentes, mas `needs` só conecta jobs dentro do mesmo workflow. Aqui a ligação entre os dois arquivos é feita por `workflow_run`. Também substituí as aspas tipográficas em `python-version`, usei o usuário do Docker Hub via secret e corrigi o caminho de inicialização da aplicação.
+
+## LAB 9 — Homologacao e producao
+
+Os workflows agora atendem ao fluxo do LAB 9:
+
+- Push ou PR para `develop` e `main`: executa os testes.
+- Push em `develop`: publica a imagem com a tag do commit e faz deploy automatico no ambiente `homologacao`.
+- Push em `main`: publica a imagem com a tag do commit e aguarda aprovacao do ambiente `producao` antes de fazer deploy.
+- A imagem implantada usa o SHA do workflow que publicou, evitando que homologacao e producao dependam de uma tag movel como `latest`.
+
+### Configuracao necessaria no GitHub
+
+1. Crie e envie a branch `develop`.
+2. Em **Settings → Environments**, crie os ambientes `homologacao` e `producao`.
+3. Em cada ambiente, adicione os secrets `EC2_HOST`, `EC2_USERNAME` e `EC2_SSH_KEY`. Use uma instancia EC2 diferente para producao e configure nela o Docker, a porta 22 e a porta 8080.
+4. No ambiente `producao`, configure **Required reviewers** para exigir aprovacao antes do deploy.
+5. Em **Settings → Secrets and variables → Actions → Repository secrets**, mantenha `DOCKERHUB_USERNAME` e `DOCKERHUB_TOKEN`.
+6. Envie um commit para `develop` e confirme o deploy automatico em homologacao. Depois, envie/mescle em `main`, aprove o deploy pendente em `producao` e confirme o health check.
+
+Os secrets de EC2 sao definidos separadamente em cada Environment, embora mantenham os mesmos nomes. O ambiente `producao` deve apontar para a nova infraestrutura pedida pelo exercicio; o ambiente `homologacao` pode continuar usando a instancia do LAB 8.
